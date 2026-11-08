@@ -14,6 +14,8 @@ import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
@@ -45,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
     private lateinit var subView: TextView
     private lateinit var dubSwitch: SwitchCompat
+    private lateinit var reactionSwitch: SwitchCompat
     private lateinit var langSpinner: Spinner
     private lateinit var volSeek: SeekBar
 
@@ -58,6 +61,9 @@ class MainActivity : AppCompatActivity() {
     private var lastSpoken = -1
     private var shownIdx = -1
     private var speaking = false
+
+    /** (mã ngôn ngữ hoặc null = tự động, tên hiển thị) */
+    private var langOptions: List<Pair<String?, String>> = defaultLangOptions()
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -76,14 +82,16 @@ class MainActivity : AppCompatActivity() {
         statusView = findViewById(R.id.statusView)
         subView = findViewById(R.id.subView)
         dubSwitch = findViewById(R.id.dubSwitch)
+        reactionSwitch = findViewById(R.id.reactionSwitch)
         langSpinner = findViewById(R.id.langSpinner)
         volSeek = findViewById(R.id.volSeek)
 
         langSpinner.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
-            listOf("Tự động", "English", "한국어")
+            langOptions.map { it.second }
         )
+        refreshLangOptions()
         fitPlayer()
 
         player = ExoPlayer.Builder(this)
@@ -132,6 +140,7 @@ class MainActivity : AppCompatActivity() {
             if (!text.isNullOrBlank()) urlInput.setText(text.trim())
         }
         findViewById<Button>(R.id.goBtn).setOnClickListener { submit() }
+        findViewById<Button>(R.id.packsBtn).setOnClickListener { showPacks() }
         urlInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) {
                 submit()
@@ -202,6 +211,113 @@ class MainActivity : AppCompatActivity() {
         load(urlInput.text.toString())
     }
 
+    // ---------------------------------------------------------------- language packs
+
+    /** Cập nhật ô chọn ngôn ngữ: Tự động, English, 한국어 + các gói đã tải thêm. */
+    private fun refreshLangOptions() {
+        lifecycleScope.launch {
+            val have = try {
+                LanguagePacks.downloaded()
+            } catch (e: Exception) {
+                emptySet()
+            }
+            val extra = have
+                .filter { it !in LanguagePacks.DEFAULT && it != TranslateLanguage.VIETNAMESE }
+                .sortedBy { LanguagePacks.name(it) }
+                .map { it to LanguagePacks.name(it) }
+            val prev = langOptions.getOrNull(langSpinner.selectedItemPosition)?.first
+            langOptions = defaultLangOptions() + extra
+            langSpinner.adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                langOptions.map { it.second }
+            )
+            langSpinner.setSelection(langOptions.indexOfFirst { it.first == prev }.coerceAtLeast(0))
+        }
+    }
+
+    /** Hộp thoại tải / xóa gói ngôn ngữ. Chạm vào một ngôn ngữ để tải (hoặc xóa nếu đã tải). */
+    private fun showPacks() {
+        lifecycleScope.launch {
+            val codes = LanguagePacks.all()
+            var have = try {
+                LanguagePacks.downloaded()
+            } catch (e: Exception) {
+                emptySet()
+            }
+            val busy = HashSet<String>()
+
+            fun label(code: String): String {
+                val name = LanguagePacks.name(code)
+                val tag = if (code in LanguagePacks.DEFAULT) " · mặc định" else ""
+                return when {
+                    code in busy -> "⏳  $name$tag — đang tải…"
+                    code in have -> "✓  $name$tag — đã tải"
+                    else -> "⬇  $name$tag"
+                }
+            }
+
+            val adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_list_item_1,
+                codes.map { label(it) }.toMutableList()
+            )
+
+            fun refresh() {
+                adapter.clear()
+                adapter.addAll(codes.map { label(it) })
+                adapter.notifyDataSetChanged()
+            }
+
+            val dialog = AlertDialog.Builder(this@MainActivity)
+                .setTitle("Gói ngôn ngữ (~30MB mỗi gói)")
+                .setAdapter(adapter, null)
+                .setPositiveButton("Đóng", null)
+                .setOnDismissListener { refreshLangOptions() }
+                .create()
+            dialog.show()
+
+            dialog.listView.setOnItemClickListener { _, _, pos, _ ->
+                val code = codes[pos]
+                if (code in busy) return@setOnItemClickListener
+                val name = LanguagePacks.name(code)
+
+                if (code in have) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage("Xóa gói $name khỏi máy?")
+                        .setNegativeButton("Hủy", null)
+                        .setPositiveButton("Xóa") { _, _ ->
+                            lifecycleScope.launch {
+                                try {
+                                    LanguagePacks.delete(code)
+                                    have = have - code
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@MainActivity, "Không xóa được: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
+                                refresh()
+                            }
+                        }
+                        .show()
+                } else {
+                    busy.add(code)
+                    refresh()
+                    lifecycleScope.launch {
+                        try {
+                            LanguagePacks.download(code)
+                            have = have + code
+                            Toast.makeText(this@MainActivity, "Đã tải gói $name", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(this@MainActivity, "Tải lỗi (kiểm tra mạng): ${e.message}", Toast.LENGTH_LONG).show()
+                        } finally {
+                            busy.remove(code)
+                            refresh()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- loading
 
     private fun extractUrl(text: String): String? {
@@ -224,66 +340,105 @@ class MainActivity : AppCompatActivity() {
                 val data = withContext(Dispatchers.IO) { YtFetcher.fetch(url) }
                 titleView.text = data.title
 
+                if (!reactionSwitch.isChecked && REACTION_TITLE.containsMatchIn(data.title)) {
+                    reactionSwitch.isChecked = true
+                    Toast.makeText(this@MainActivity, "Tự bật chế độ reaction", Toast.LENGTH_SHORT).show()
+                }
+
                 if (!prepareVideo(data)) {
                     setStatus("Không lấy được luồng video (video giới hạn tuổi, riêng tư hoặc YouTube đã đổi). Thử cập nhật NewPipeExtractor.")
                     return@launch
                 }
 
-                val pref = when (langSpinner.selectedItemPosition) {
-                    1 -> "en"
-                    2 -> "ko"
-                    else -> null
-                }
+                val pref = langOptions.getOrNull(langSpinner.selectedItemPosition)?.first
                 val track = Subtitles.pick(data.subs, pref)
                 if (track == null) {
-                    setStatus("Video không có phụ đề nên chưa lồng tiếng được. Đang phát video bình thường.")
-                    player?.playWhenReady = true
+                    playPlain("Video không có phụ đề nên chưa lồng tiếng được.")
                     return@launch
+                }
+                val code = track.lang.substringBefore('-').lowercase()
+
+                // Ngôn ngữ ngoài Anh/Hàn: phải tải gói trước khi dùng
+                if (code != "vi") {
+                    if (TranslateLanguage.fromLanguageTag(code) == null) {
+                        playPlain("Chưa hỗ trợ dịch từ ngôn ngữ \"${track.lang}\".")
+                        return@launch
+                    }
+                    if (code !in LanguagePacks.DEFAULT) {
+                        val have = try {
+                            LanguagePacks.downloaded()
+                        } catch (e: Exception) {
+                            emptySet()
+                        }
+                        if (code !in have) {
+                            playPlain("Phụ đề là tiếng ${LanguagePacks.name(code)}. Cần tải gói ngôn ngữ này trước (nút \"Gói ngôn ngữ\"), rồi bấm Xem lại.")
+                            return@launch
+                        }
+                    }
                 }
 
                 setStatus("Đang tải phụ đề (${track.lang}${if (track.auto) ", tự động" else ""})…")
-                val parsed = withContext(Dispatchers.IO) { Subtitles.load(track) }
+                val reaction = reactionSwitch.isChecked
+                val parsed = withContext(Dispatchers.IO) { Subtitles.load(track, reaction) }
                 if (parsed.isEmpty()) {
-                    setStatus("Không đọc được phụ đề của video này. Đang phát video bình thường.")
-                    player?.playWhenReady = true
+                    playPlain("Không đọc được phụ đề của video này.")
                     return@launch
+                }
+
+                if (reaction) {
+                    setStatus("Đang lọc lời người nói…")
+                    filterReaction(parsed, code)
                 }
                 cues = parsed
+                val skipped = parsed.count { it.kind == Kind.SKIP }
+                val skipNote = if (skipped > 0) " Đã bỏ $skipped câu không phải lời người nói." else ""
 
-                val code = track.lang.substringBefore('-').lowercase()
                 if (code == "vi") {
-                    cues.forEach { it.vi = it.text }
-                    setStatus("Có phụ đề tiếng Việt sẵn · lồng tiếng." + ttsNote())
+                    cues.forEach { if (it.kind == Kind.SPEECH) it.vi = it.text }
+                    setStatus("Có phụ đề tiếng Việt sẵn · lồng tiếng.$skipNote" + ttsNote())
                     player?.playWhenReady = true
                     return@launch
                 }
 
-                val source = TranslateLanguage.fromLanguageTag(code)
-                if (source == null) {
-                    setStatus("Chưa hỗ trợ dịch từ ngôn ngữ \"${track.lang}\". Đang phát video bình thường.")
-                    player?.playWhenReady = true
-                    return@launch
-                }
+                setStatus("Đang chuẩn bị gói dịch ${track.lang} → vi (lần đầu có thể cần tải)…")
+                translator.prepare(code)
 
-                setStatus("Đang chuẩn bị gói dịch ${track.lang} → vi (lần đầu cần tải khoảng 30MB)…")
-                translator.prepare(source)
-
-                // Dịch lần lượt từ đầu; phát video khi đã dịch được vài câu đầu
+                // Dịch lần lượt từ đầu; phát video khi đã dịch được vài câu đầu.
+                // Chỉ dịch lời nói; hát/nhạc chỉ hiện nhãn [hát]/[nhạc].
                 var started = false
                 for ((i, cue) in cues.withIndex()) {
-                    cue.vi = translator.translate(cue.text)
+                    if (cue.kind == Kind.SPEECH) cue.vi = translator.translate(cue.text)
                     if (!started && (i >= START_AFTER || i == cues.lastIndex)) {
                         started = true
                         player?.playWhenReady = true
                     }
                     if (i % 10 == 0) setStatus("Đang dịch phụ đề ${i + 1}/${cues.size}…")
                 }
-                setStatus("Đã dịch xong · lồng tiếng ${track.lang} → vi." + ttsNote())
+                setStatus("Đã dịch xong · lồng tiếng ${track.lang} → vi.$skipNote" + ttsNote())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 setStatus("Lỗi: ${e.message ?: e.javaClass.simpleName}")
             }
+        }
+    }
+
+    private fun playPlain(reason: String) {
+        setStatus("$reason Đang phát video bình thường.")
+        player?.playWhenReady = true
+    }
+
+    /** Chế độ reaction: bỏ các câu có ngôn ngữ khác ngôn ngữ người nói (thường là lời bài hát/clip gốc). */
+    private suspend fun filterReaction(list: List<Cue>, expected: String) {
+        val langId = LangId()
+        try {
+            for (c in list) {
+                if (c.kind != Kind.SPEECH || c.text.length < 12) continue
+                val lang = langId.detect(c.text).substringBefore('-').lowercase()
+                if (lang != "und" && lang != expected) c.kind = Kind.SKIP
+            }
+        } finally {
+            langId.close()
         }
     }
 
@@ -351,7 +506,7 @@ class MainActivity : AppCompatActivity() {
                 lo = mid + 1
             } else hi = mid - 1
         }
-        return if (ans >= 0 && pos <= cues[ans].endMs) ans else -1
+        return if (ans >= 0 && pos <= cues[ans].endMs && cues[ans].kind != Kind.SKIP) ans else -1
     }
 
     private fun tick() {
@@ -364,12 +519,13 @@ class MainActivity : AppCompatActivity() {
             shownIdx = idx
             subView.text = if (idx >= 0) {
                 val c = cues[idx]
-                (c.vi ?: "…") + "\n\n" + c.text
+                if (c.kind == Kind.SPEECH) (c.vi ?: "…") + "\n\n" + c.text else (c.vi ?: "")
             } else ""
         }
 
         if (!dubSwitch.isChecked || !p.isPlaying || idx < 0 || idx == lastSpoken) return
         val cue = cues[idx]
+        if (cue.kind != Kind.SPEECH) return          // hát/nhạc: chỉ hiện nhãn, không đọc
         val vi = cue.vi ?: return
         lastSpoken = idx
 
@@ -384,5 +540,9 @@ class MainActivity : AppCompatActivity() {
         private const val TICK_MS = 150L
         private const val START_AFTER = 14        // phát khi đã dịch xong ~15 câu đầu
         private const val CHARS_PER_SEC = 14f     // ước lượng tốc độ đọc tiếng Việt ở 1.0x
+        private val REACTION_TITLE = Regex("""(?i)react|리액션|リアクション|phản ứng""")
+
+        private fun defaultLangOptions(): List<Pair<String?, String>> =
+            listOf(null to "Tự động", "en" to "English", "ko" to "한국어")
     }
 }

@@ -60,6 +60,7 @@ dependencies {
 
     // Dịch offline trên máy (Hàn/Anh -> Việt)
     implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
 
     // Lấy thông tin video + phụ đề YouTube (thư viện của NewPipe)
