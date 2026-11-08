@@ -67,5 +67,5 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Nếu YouTube đổi và app lỗi, hãy nâng phiên bản này lên bản mới nhất:
     // https://github.com/TeamNewPipe/NewPipeExtractor/releases
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.8")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.0")
 }
