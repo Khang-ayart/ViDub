@@ -70,8 +70,9 @@ dependencies {
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
 
-    // Nhận dạng giọng nói (Zipformer) và giọng đọc Piper, chạy offline bằng CPU (sherpa-onnx, qua JitPack)
-    implementation("com.github.k2-fsa:sherpa-onnx:2.0.0")
+    // Nhận dạng giọng nói (Zipformer) và giọng đọc Piper, chạy offline bằng CPU (sherpa-onnx).
+    // File AAR được workflow tải từ bản phát hành chính thức vào app/libs (xem .github/workflows/build.yml).
+    implementation(files("libs/sherpa-onnx.aar"))
     // Giải nén gói .tar.bz2
     implementation("org.apache.commons:commons-compress:1.26.2")
 

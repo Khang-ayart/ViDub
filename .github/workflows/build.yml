@@ -20,6 +20,13 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Download sherpa-onnx AAR
+        run: |
+          mkdir -p app/libs
+          curl -fL --retry 3 -o app/libs/sherpa-onnx.aar \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.0/sherpa-onnx-2.0.0.aar
+          ls -l app/libs
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
