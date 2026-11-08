@@ -114,7 +114,10 @@ class PackStore(ctx: Context) {
 
     fun isInstalled(id: String) = installedVersion(id) != null
 
-    fun needsUpdate(p: Pack): Boolean = (installedVersion(p.id) ?: return false) < p.version
+    fun needsUpdate(p: Pack): Boolean {
+        val v = installedVersion(p.id) ?: return false
+        return v < p.version
+    }
 
     fun delete(id: String) {
         dir(id).deleteRecursively()
