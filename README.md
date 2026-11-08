@@ -21,10 +21,17 @@ Nếu build lỗi, copy dòng lỗi trong tab Actions gửi lại để sửa.
 - Chọn ngôn ngữ phụ đề gốc (Tự động / English / 한국어). Tự động ưu tiên: phụ đề tiếng Việt có sẵn → Hàn → Anh, bản người làm trước bản tự động.
 - Máy cần có giọng tiếng Việt: Cài đặt → Chuyển văn bản thành giọng nói (Google) → tải tiếng Việt.
 
-## Gói ngôn ngữ
-- Nút **Gói ngôn ngữ (tải thêm)**: danh sách ngôn ngữ nguồn (Nhật, Trung, Pháp, Tây Ban Nha, Thái...). Chạm để tải (~30MB/gói), chạm lần nữa để xóa.
-- Anh và Hàn là mặc định, tự tải khi cần. Ngôn ngữ khác phải tải trước, nếu không app sẽ nhắc và chỉ phát video.
-- Gói đã tải sẽ xuất hiện trong ô chọn ngôn ngữ phụ đề.
+## Quản lý gói (nút "Quản lý gói")
+Không gói nào bắt buộc. Mỗi gói tải, cập nhật, xóa độc lập; tải vào thư mục tạm rồi mới thay bản cũ nên tải lỗi không làm hỏng bản đang dùng.
+- **Nhận dạng giọng nói** (sherpa-onnx + Zipformer int8, chạy CPU): dùng khi video không có phụ đề. Tiếng Anh (~76MB) tự tải ở lần đầu cần; ngôn ngữ khác (hiện có tiếng Hàn ~77MB) phải tải trước. Kèm một gói VAD rất nhỏ (~2MB) tự tải theo.
+- **Giọng đọc Piper** (offline): chọn ở ô "Giọng đọc". Mặc định vẫn là giọng hệ thống; Piper lỗi thì tự quay về giọng hệ thống.
+- **Dịch sang tiếng Việt** (ML Kit, ~30MB/gói): Anh/Hàn tự tải khi cần, ngôn ngữ khác phải tải trước.
+- Danh mục gói nằm ở `app/src/main/assets/catalog.json`. App lấy bản mới nhất từ GitHub của repo (nhánh `main`) nên thêm/sửa gói hoặc nâng `version` (để hiện nút Cập nhật) không cần build lại APK.
+
+## Video không có phụ đề
+- App tải luồng âm thanh, cắt đoạn có tiếng nói, nhận dạng từng đoạn, dịch rồi đọc. Video phát sau ~15 giây đầu; nếu video đuổi kịp phần đã nhận dạng thì tự tạm dừng chờ.
+- Ngôn ngữ nói được đoán theo ký tự trong tiêu đề (Hàn/Nhật/Thái/Nga/Trung, còn lại coi là tiếng Anh); đoán sai thì chọn ngôn ngữ ở ô chọn.
+- Chưa nhận diện được [hát]/[nhạc] ở chế độ này; nhạc có thể bị nhận dạng thành chữ sai.
 
 ## Video reaction
 - Bật **Video reaction** (tự bật nếu tiêu đề có chữ react/reaction/리액션/リアクション) để chỉ dịch người đang nói.

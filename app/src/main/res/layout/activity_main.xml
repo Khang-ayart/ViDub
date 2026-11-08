@@ -106,13 +106,32 @@
                     android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Giọng đọc" />
+
+                <Spinner
+                    android:id="@+id/ttsSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
             <Button
                 android:id="@+id/packsBtn"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Gói ngôn ngữ (tải thêm)" />
+                android:text="Quản lý gói (dịch, giọng đọc, nhận dạng)" />
 
             <TextView
                 android:layout_width="wrap_content"

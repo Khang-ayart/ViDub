@@ -18,6 +18,10 @@
         android:theme="@style/Theme.ViDub">
 
         <activity
+            android:name=".PacksActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
             android:exported="true"

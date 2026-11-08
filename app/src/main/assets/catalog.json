@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "vad-silero",
+      "type": "vad",
+      "lang": "",
+      "name": "Phát hiện giọng nói (Silero VAD)",
+      "version": 1,
+      "sizeMb": 2,
+      "files": [
+        { "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx", "name": "silero_vad.onnx" }
+      ]
+    },
+    {
+      "id": "stt-en-zipformer",
+      "type": "stt",
+      "lang": "en",
+      "name": "Zipformer tiếng Anh (int8, GigaSpeech)",
+      "version": 1,
+      "sizeMb": 76,
+      "files": [
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-gigaspeech-2023-12-12/resolve/main/encoder-epoch-30-avg-1.int8.onnx", "name": "encoder.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-gigaspeech-2023-12-12/resolve/main/decoder-epoch-30-avg-1.int8.onnx", "name": "decoder.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-gigaspeech-2023-12-12/resolve/main/joiner-epoch-30-avg-1.int8.onnx", "name": "joiner.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-gigaspeech-2023-12-12/resolve/main/tokens.txt", "name": "tokens.txt" }
+      ]
+    },
+    {
+      "id": "stt-ko-zipformer",
+      "type": "stt",
+      "lang": "ko",
+      "name": "Zipformer tiếng Hàn (int8)",
+      "version": 1,
+      "sizeMb": 77,
+      "files": [
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-korean-2024-06-24/resolve/main/encoder-epoch-99-avg-1.int8.onnx", "name": "encoder.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-korean-2024-06-24/resolve/main/decoder-epoch-99-avg-1.int8.onnx", "name": "decoder.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-korean-2024-06-24/resolve/main/joiner-epoch-99-avg-1.int8.onnx", "name": "joiner.int8.onnx" },
+        { "url": "https://huggingface.co/k2-fsa/sherpa-onnx-zipformer-korean-2024-06-24/resolve/main/tokens.txt", "name": "tokens.txt" }
+      ]
+    },
+    {
+      "id": "tts-vi-vivos-xlow",
+      "type": "tts",
+      "lang": "vi",
+      "name": "Piper tiếng Việt · vivos (x_low, 65 giọng)",
+      "version": 1,
+      "sizeMb": 0,
+      "archive": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-vi_VN-vivos-x_low.tar.bz2"
+    },
+    {
+      "id": "tts-vi-vais1000-medium",
+      "type": "tts",
+      "lang": "vi",
+      "name": "Piper tiếng Việt · vais1000 (medium)",
+      "version": 1,
+      "sizeMb": 0,
+      "archive": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-vi_VN-vais1000-medium.tar.bz2"
+    }
+  ]
+}

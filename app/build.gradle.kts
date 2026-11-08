@@ -12,7 +12,12 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
+
+        // Chỉ giữ ABI của điện thoại thật để APK nhẹ hơn (sherpa-onnx mang theo thư viện native)
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     compileOptions {
@@ -24,6 +29,8 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        // sherpa-onnx có thể được biên dịch bằng Kotlin mới hơn bản đang dùng
+        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
 
     lint {
@@ -62,6 +69,11 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.android.gms:play-services-tasks:18.2.0")
+
+    // Nhận dạng giọng nói (Zipformer) và giọng đọc Piper, chạy offline bằng CPU (sherpa-onnx, qua JitPack)
+    implementation("com.github.k2-fsa:sherpa-onnx:2.0.0")
+    // Giải nén gói .tar.bz2
+    implementation("org.apache.commons:commons-compress:1.26.2")
 
     // Lấy thông tin video + phụ đề YouTube (thư viện của NewPipe)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
