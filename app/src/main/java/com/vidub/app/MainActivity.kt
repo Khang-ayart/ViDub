@@ -423,7 +423,7 @@ class MainActivity : AppCompatActivity() {
         setStatus("Đang tải phụ đề (${track.lang}${if (track.auto) ", tự động" else ""})…")
         val parsed = withContext(Dispatchers.IO) { Subtitles.load(track, reaction) }
         if (parsed.isEmpty()) {
-            playPlain("Không đọc được phụ đề của video này.")
+            playPlain("Không đọc được phụ đề của video này (${Subtitles.lastDebug}).")
             return
         }
 
@@ -794,7 +794,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val SYSTEM_TTS = "system"
-        private const val SYSTEM_TTS_NAME = "Giọng hệ thống (mặc định)"
+        private const val SYSTEM_TTS_NAME = "Hệ thống (mặc định)"
         private const val TICK_MS = 150L
         private const val START_AFTER = 14        // phát khi đã dịch xong ~15 câu đầu
         private const val START_MS = 15_000L      // nhận dạng: phát khi đã xử lý ~15 giây đầu

@@ -42,12 +42,31 @@ object Subtitles {
         }
     }
 
+    /** Thông tin chẩn đoán lần tải phụ đề gần nhất (hiện ra khi đọc phụ đề thất bại). */
+    @Volatile
+    var lastDebug: String = ""
+
     /** Chạy trên luồng nền (IO). [reaction] = true thì lọc chặt hơn lời bài hát lặp lại. */
     fun load(track: SubTrack, reaction: Boolean): List<Cue> {
-        val raw = NewPipe.getDownloader().get(track.url).responseBody()
-        val cues = parseVtt(raw, track.auto)
-        markRepeatedAsSinging(cues, reaction)
-        return merge(cues)
+        val dl = NewPipe.getDownloader()
+        // Ưu tiên VTT; nếu không được thì dùng URL gốc (thường là TTML)
+        val urls = listOf(track.url.replace(Regex("&fmt=[^&]*"), "") + "&fmt=vtt", track.url).distinct()
+        var parsed: List<Cue> = emptyList()
+        val dbg = StringBuilder()
+        for (u in urls) {
+            val fmt = Regex("fmt=([^&]*)").find(u)?.groupValues?.get(1) ?: "?"
+            try {
+                val body = dl.get(u).responseBody()
+                parsed = parse(body, track.auto)
+                dbg.append("[$fmt: ${body.length} ký tự, ${parsed.size} câu, đầu: ${body.take(50).replace('\n', ' ')}] ")
+            } catch (e: Exception) {
+                dbg.append("[$fmt lỗi: ${e.message}] ")
+            }
+            if (parsed.isNotEmpty()) break
+        }
+        lastDebug = dbg.toString()
+        markRepeatedAsSinging(parsed, reaction)
+        return merge(parsed)
     }
 
     // ------------------------------------------------------------ parsing
@@ -69,19 +88,38 @@ object Subtitles {
         (if (h.isEmpty()) 0L else h.toLong()) * 3_600_000L +
             m.toLong() * 60_000L + s.toLong() * 1_000L + milli.toLong()
 
+    private val NUM_ENTITY = Regex("&#(\\d+);")
+
+    private fun unescape(text: String): String {
+        var t = text
+        repeat(2) {   // YouTube hay escape hai lần (&amp;#39;)
+            t = t.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+                .replace("&apos;", "'").replace("&nbsp;", " ")
+                .replace(NUM_ENTITY) { m ->
+                    val cp = m.groupValues[1].toIntOrNull()
+                    if (cp != null && Character.isValidCodePoint(cp)) String(Character.toChars(cp)) else ""
+                }
+                .replace("&amp;", "&")
+        }
+        return t
+    }
+
     private fun clean(line: String): String =
-        line.replace(TAGS, "")
-            .replace(BRACKET, "")                 // [Music], [Âm nhạc], (applause)...
-            .replace(NOTE, "")
-            .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-            .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ")
+        unescape(line.replace(TAGS, "").replace(BRACKET, "").replace(NOTE, ""))   // [Music], [Âm nhạc], ♪...
             .replace(Regex("\\s+"), " ")
             .trim()
 
-    fun parseVtt(raw: String, auto: Boolean): List<Cue> {
+    private class RawCue(val start: Long, val end: Long, val lines: List<String>)
+
+    /** Tự nhận định dạng: WebVTT hoặc TTML/srv3 (YouTube thường trả TTML). */
+    fun parse(raw: String, auto: Boolean): List<Cue> {
+        val entries = if (TIME.containsMatchIn(raw)) vttEntries(raw) else ttmlEntries(raw)
+        return process(entries, auto)
+    }
+
+    private fun vttEntries(raw: String): List<RawCue> {
         val lines = raw.replace("\r", "").split("\n")
-        val out = ArrayList<Cue>()
-        var prev: List<String> = emptyList()
+        val out = ArrayList<RawCue>()
         var i = 0
         while (i < lines.size) {
             val m = TIME.find(lines[i])
@@ -93,13 +131,60 @@ object Subtitles {
             val start = ms(g[1], g[2], g[3], g[4])
             val end = ms(g[5], g[6], g[7], g[8])
             i++
-
             val rawLines = ArrayList<String>()
             while (i < lines.size && lines[i].isNotBlank()) {
                 rawLines.add(lines[i].replace(TAGS, ""))
                 i++
             }
+            out.add(RawCue(start, end, rawLines))
+        }
+        return out
+    }
 
+    private val P_RE = Regex("""<p\b([^>]*)>(.*?)</p>""", RegexOption.DOT_MATCHES_ALL)
+
+    private fun ttmlTime(s: String): Long? {
+        val v = s.trim()
+        return try {
+            when {
+                v.endsWith("ms") -> v.dropLast(2).toDouble().toLong()
+                v.endsWith("s") -> (v.dropLast(1).toDouble() * 1000).toLong()
+                else -> {
+                    val parts = v.split(':')
+                    when (parts.size) {
+                        3 -> (parts[0].toLong() * 3600 + parts[1].toLong() * 60) * 1000 + (parts[2].toDouble() * 1000).toLong()
+                        2 -> parts[0].toLong() * 60_000 + (parts[1].toDouble() * 1000).toLong()
+                        else -> (v.toDouble() * 1000).toLong()
+                    }
+                }
+            }
+        } catch (e: NumberFormatException) {
+            null
+        }
+    }
+
+    private fun ttmlEntries(raw: String): List<RawCue> {
+        val out = ArrayList<RawCue>()
+        for (m in P_RE.findAll(raw)) {
+            val attrs = m.groupValues[1]
+            fun attr(n: String) = Regex("""\b$n="([^"]*)"""").find(attrs)?.groupValues?.get(1)
+            // TTML: begin/end; srv3: t/d (mili giây)
+            val start = attr("begin")?.let { ttmlTime(it) } ?: attr("t")?.toLongOrNull() ?: continue
+            val end = attr("end")?.let { ttmlTime(it) }
+                ?: attr("d")?.toLongOrNull()?.let { start + it }
+                ?: (start + 2_000)
+            val inner = m.groupValues[2].replace(Regex("<br\\s*/?>"), "\n")
+            val lines = inner.split("\n").map { it.replace(TAGS, "") }
+            out.add(RawCue(start, end, lines))
+        }
+        return out
+    }
+
+    private fun process(entries: List<RawCue>, auto: Boolean): List<Cue> {
+        val out = ArrayList<Cue>()
+        var prev: List<String> = emptyList()
+        for (e in entries) {
+            val rawLines = e.lines
             // Nhận diện hát/nhạc TRƯỚC khi xóa ký hiệu
             val hasNote = rawLines.any { NOTE.containsMatchIn(it) }
             var bracketSing = false
@@ -125,9 +210,9 @@ object Subtitles {
             if (textLines.isNotEmpty()) prev = textLines
 
             if (kind == Kind.SPEECH) {
-                if (fresh.isNotEmpty()) out.add(Cue(start, end, fresh.joinToString(" ")))
+                if (fresh.isNotEmpty()) out.add(Cue(e.start, e.end, fresh.joinToString(" ")))
             } else if (kind != null) {
-                out.add(Cue(start, end, textLines.joinToString(" "), kind))
+                out.add(Cue(e.start, e.end, textLines.joinToString(" "), kind))
             }
         }
         return out
