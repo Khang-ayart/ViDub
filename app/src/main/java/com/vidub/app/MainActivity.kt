@@ -18,6 +18,7 @@ import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.lifecycle.lifecycleScope
@@ -38,9 +39,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.coroutines.resume
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MainActivity : AppCompatActivity() {
@@ -394,7 +397,12 @@ class MainActivity : AppCompatActivity() {
                 val reaction = reactionSwitch.isChecked
                 val track = Subtitles.pick(data.subs, pref)
                 if (track == null) {
-                    runAutoSubs(data, pref, reaction)
+                    if (data.subs.isNotEmpty()) {
+                        val langs = data.subs.joinToString(", ") { it.lang + if (it.auto) " (tự động)" else "" }
+                        playPlain("Video có phụ đề ($langs) nhưng app chưa hỗ trợ dịch các ngôn ngữ này.")
+                    } else {
+                        runAutoSubs(data, pref, reaction)
+                    }
                 } else {
                     runSubtitles(track, reaction)
                 }
@@ -502,11 +510,21 @@ class MainActivity : AppCompatActivity() {
             playPlain("Video không có phụ đề. Chưa có gói nhận dạng giọng nói cho \"$langName\".")
             return
         }
-        // Tiếng Anh tự tải khi cần; ngôn ngữ khác phải tải trước
+        // Tiếng Anh tự tải khi cần; ngôn ngữ khác hỏi trước khi tải
         if (!store.isInstalled(sttPack.id) && lang != "en") {
-            playPlain("Video không có phụ đề. Cần tải gói nhận dạng giọng nói $langName (nút \"Quản lý gói\") rồi bấm Xem lại. Nếu đoán sai ngôn ngữ, hãy chọn ngôn ngữ ở ô bên trên.")
-            return
+            val size = if (sttPack.sizeMb > 0) " (~${sttPack.sizeMb}MB)" else ""
+            val ok = askYesNo(
+                "Video này không có phụ đề.\n\nTải gói nhận dạng giọng nói $langName$size để tạo phụ đề tự động?\n\n" +
+                    "(Ngôn ngữ được đoán theo tiêu đề. Nếu sai, chọn lại ở ô ngôn ngữ rồi bấm Xem.)",
+                "Tải và dùng",
+                "Xem không lồng tiếng"
+            )
+            if (!ok) {
+                playPlain("Video không có phụ đề.")
+                return
+            }
         }
+        setStatus("Video không có phụ đề (NewPipe trả về ${data.subs.size} phụ đề) — dùng nhận dạng giọng nói, đoán là $langName.")
         if (lang != "vi" && !checkTranslatable(lang, langName)) return
 
         val gen = ++sttGen
@@ -581,6 +599,18 @@ class MainActivity : AppCompatActivity() {
             if (gen == sttGen) sttDone = true
         }
     }
+
+    private suspend fun askYesNo(message: String, yes: String, no: String): Boolean =
+        suspendCancellableCoroutine { cont ->
+            val dialog = AlertDialog.Builder(this)
+                .setMessage(message)
+                .setPositiveButton(yes) { _, _ -> if (cont.isActive) cont.resume(true) }
+                .setNegativeButton(no) { _, _ -> if (cont.isActive) cont.resume(false) }
+                .setOnCancelListener { if (cont.isActive) cont.resume(false) }
+                .create()
+            cont.invokeOnCancellation { dialog.dismiss() }
+            dialog.show()
+        }
 
     private fun normalizeStt(raw: String, lang: String): String {
         var t = raw.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
