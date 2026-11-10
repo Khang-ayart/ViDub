@@ -409,7 +409,10 @@ class MainActivity : AppCompatActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                setStatus("Lỗi: ${e.message ?: e.javaClass.simpleName}")
+                setStatus(
+                    "Lỗi: ${e.message ?: e.javaClass.simpleName}" +
+                        (ViDubApp.mlkitError?.let { "\n(Khởi động ML Kit: $it)" } ?: "")
+                )
                 if (sttActive) sttDone = true
             }
         }
